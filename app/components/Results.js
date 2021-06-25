@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useReducer } from 'react'
 import { battle } from '../utils/api'
 import { FaCompass, FaBriefcase, FaUsers, FaUserFriends, FaCode, FaUser } from 'react-icons/fa'
 import Card from './Card'
@@ -47,72 +47,92 @@ ProfileList.propTypes = {
   profile: PropTypes.object.isRequired,
 }
 
-export default class Results extends React.Component {
-  state = {
-    winner: null,
-    loser: null,
-    error: null,
-    loading: true
-  }
-  componentDidMount () {
-    const { playerOne, playerTwo } = queryString.parse(this.props.location.search)
+const resultsReducer = (state, { type, winner, loser, error }) => {
+  switch (type) {
+    case "success":
+      return { 
+        ...state, 
+        winner: winner,
+        loser: loser,
+        loading: false
+      }
+    
+    case "error":
+      return { 
+        ...state, 
+        error: error,
+        loading: false
+      }
 
-    battle([ playerOne, playerTwo ])
-      .then((players) => {
-        this.setState({
-          winner: players[0],
-          loser: players[1],
-          error: null,
-          loading: false
-        })
-      }).catch(({ message }) => {
-        this.setState({
-          error: message,
-          loading: false
-        })
-      })
-  }
-  render() {
-    const { winner, loser, error, loading } = this.state
-
-    if (loading === true) {
-      return <Loading text='Battling' />
-    }
-
-    if (error) {
-      return (
-        <p className='center-text error'>{error}</p>
-      )
-    }
-
-    return (
-      <React.Fragment>
-        <div className='grid space-around container-sm'>
-          <Card
-            header={winner.score === loser.score ? 'Tie' : 'Winner'}
-            subheader={`Score: ${winner.score.toLocaleString()}`}
-            avatar={winner.profile.avatar_url}
-            href={winner.profile.html_url}
-            name={winner.profile.login}
-          >
-            <ProfileList profile={winner.profile}/>
-          </Card>
-          <Card
-            header={winner.score === loser.score ? 'Tie' : 'Loser'}
-            subheader={`Score: ${loser.score.toLocaleString()}`}
-            avatar={loser.profile.avatar_url}
-            name={loser.profile.login}
-            href={loser.profile.html_url}
-          >
-            <ProfileList profile={loser.profile}/>
-          </Card>
-        </div>
-        <Link
-          to='/battle'
-          className='btn dark-btn btn-space'>
-            Reset
-        </Link>
-      </React.Fragment>
-    )
+    default:
+      return state;
   }
 }
+
+const initialState = {
+  winner: null,
+  loser: null,
+  error: null,
+  loading: true
+}
+
+const Results = ({ location }) => {
+  const { playerOne, playerTwo } = queryString.parse(location.search);
+
+  const [state, dispatch] = useReducer(resultsReducer, initialState);
+
+  const { winner, loser, error, loading } = state;
+
+  useEffect(() => {
+    // effect
+    battle([playerOne, playerTwo])
+      .then((players) => dispatch({ type: "success", winner: players[0], loser: players[1]}))
+      .catch((err) => dispatch({ type: "error", error: err.message }))
+  }, [playerOne, playerTwo])
+
+
+  if (loading) {
+    return <Loading text='Battling' />
+  }
+
+  if (error) {
+    return (
+      <p className='center-text error'>{error}</p>
+    )
+  }
+
+  return (
+    <React.Fragment>
+      <div className='grid space-around container-sm'>
+        <Card
+          header={winner.score === loser.score ? 'Tie' : 'Winner'}
+          subheader={`Score: ${winner.score.toLocaleString()}`}
+          avatar={winner.profile.avatar_url}
+          href={winner.profile.html_url}
+          name={winner.profile.login}
+        >
+          <ProfileList profile={winner.profile}/>
+        </Card>
+
+        <Card
+          header={winner.score === loser.score ? 'Tie' : 'Loser'}
+          subheader={`Score: ${loser.score.toLocaleString()}`}
+          avatar={loser.profile.avatar_url}
+          name={loser.profile.login}
+          href={loser.profile.html_url}
+        >
+          <ProfileList profile={loser.profile}/>
+        </Card>
+
+      </div>
+
+      <Link
+        to='/battle'
+        className='btn dark-btn btn-space'>
+          Reset
+      </Link>
+    </React.Fragment>
+  )
+}
+
+export default Results;
