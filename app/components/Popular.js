@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useReducer, useRef } from 'react'
 import PropTypes from 'prop-types'
 import { fetchPopularRepos } from '../utils/api'
 import { FaUser, FaStar, FaCodeBranch, FaExclamationTriangle } from 'react-icons/fa'
@@ -79,61 +79,66 @@ ReposGrid.propTypes = {
   repos: PropTypes.array.isRequired
 }
 
-export default class Popular extends React.Component {
-  state = {
-    selectedLanguage: 'All',
-    repos: {},
-    error: null,
-  }
-  componentDidMount () {
-    this.updateLanguage(this.state.selectedLanguage)
-  }
-  updateLanguage = (selectedLanguage) => {
-    this.setState({
-      selectedLanguage,
-      error: null,
-    })
+const popularReducer = (state, { type, selectedLanguage, repos, error }) => {
+  switch (type) {
+    case "success": {
+      return {
+        ...state,
+        [selectedLanguage]: repos
+      }
+    }
 
-    if (!this.state.repos[selectedLanguage]) {
-      fetchPopularRepos(selectedLanguage)
-        .then((data) => {
-          this.setState(({ repos }) => ({
-            repos: {
-              ...repos,
-              [selectedLanguage]: data
-            }
-          }))
-        })
-        .catch(() => {
-          console.warn('Error fetching repos: ', error)
-
-          this.setState({
-            error: `There was an error fetching the repositories.`
-          })
-        })
+    case "error": {
+      return {
+        ...state,
+        error: error
+      }
+    }
+  
+    default: {
+      return state;
     }
   }
-  isLoading = () => {
-    const { selectedLanguage, repos, error } = this.state
-
-    return !repos[selectedLanguage] && error === null
-  }
-  render() {
-    const { selectedLanguage, repos, error } = this.state
-
-    return (
-      <React.Fragment>
-        <LangaugesNav
-          selected={selectedLanguage}
-          onUpdateLanguage={this.updateLanguage}
-        />
-
-        {this.isLoading() && <Loading text='Fetching Repos' />}
-
-        {error && <p className='center-text error'>{error}</p>}
-
-        {repos[selectedLanguage] && <ReposGrid repos={repos[selectedLanguage]} />}
-      </React.Fragment>
-    )
-  }
 }
+
+const Popular = () => {
+  const [selectedLanguage, setSelectedLanguage] = useState('All');
+  const [state, dispatch] = useReducer(popularReducer, { 
+    error: null
+  });
+
+  // to persist across rerenders
+  const fetchedLanguages = useRef([]);
+
+  useEffect(() => {
+    // effect
+    if (!fetchedLanguages.current.includes(selectedLanguage)) {
+      fetchedLanguages.current.push(selectedLanguage);
+
+      fetchPopularRepos(selectedLanguage)
+        .then((repos) => dispatch({ type: "success", selectedLanguage: selectedLanguage, repos: repos }))
+        .catch((err) => dispatch({ type: "error", error: err.message }))
+    }
+
+  }, [fetchedLanguages, selectedLanguage])
+
+  const isLoading = () => !state[selectedLanguage] && state.error === null;
+
+  return (
+    <React.Fragment>
+      <LangaugesNav
+        selected={selectedLanguage}
+        onUpdateLanguage={setSelectedLanguage}
+      />
+
+      {isLoading() && <Loading text='Fetching Repos' />}
+
+      {state.error && <p className='center-text error'>{state.error}</p>}
+
+      {state[selectedLanguage] && <ReposGrid repos={state[selectedLanguage]} />}
+
+    </React.Fragment>
+  )
+}
+
+export default Popular;
